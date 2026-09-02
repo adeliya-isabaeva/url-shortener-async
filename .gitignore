@@ -1,7 +1,19 @@
-.env
+# Папки IDE
+.idea/
+.vscode/
+
+# Виртуальное окружение
+venv/
+env/
+
+# Python кэши
 __pycache__/
 *.pyc
-venv/
-.venv/
-*.log
+*.pyo
+
+# Переменные окружения и секреты
+.env
+
+# macOS и Windows мусор
 .DS_Store
+Thumbs.db
