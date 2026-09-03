@@ -1,8 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import RedirectResponse
+from urllib.parse import urlparse
 from pydantic import BaseModel
-from app.services.shortener import generate_short_code
+import redis.asyncio as redis
+import random
+import string
 
 router = APIRouter()
+
+# Клиент Redis (имя 'redis' — из docker-compose)
+r = redis.Redis(host="redis", port=6379, decode_responses=True)
 
 
 class URLRequest(BaseModel):
@@ -14,7 +21,39 @@ class URLResponse(BaseModel):
     original_url: str
 
 
+def generate_short_code():
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+
+
+async def save_url(code: str, url: str):
+    await r.set(f"code:{code}", url)
+
+
+async def get_url(code: str):
+    return await r.get(f"code:{code}")
+
+
 @router.post("/shorten", response_model=URLResponse)
 async def shorten_url(request: URLRequest):
+    print(f"🚀 ПОЛУЧЕН URL: '{request.url}'")
+
+    parsed = urlparse(request.url)
+    if not parsed.scheme or not parsed.netloc:
+        print("⚠️ СРАБОТАЛА ПРОВЕРКА: URL невалиден!")
+        raise HTTPException(
+            status_code=422,
+            detail="Неверный формат URL. Ссылка должна начинаться с http:// или https://"
+        )
+
     code = generate_short_code()
+    await save_url(code, request.url)
+    print(f"✅ Сохранено: code:{code} -> {request.url}")
     return URLResponse(short_code=code, original_url=request.url)
+
+
+@router.get("/{short_code}")
+async def redirect_url(short_code: str):
+    original_url = await get_url(short_code)
+    if original_url is None:
+        raise HTTPException(status_code=404, detail="Short code not found")
+    return RedirectResponse(url=original_url, status_code=302)

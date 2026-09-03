@@ -5,3 +5,4 @@ httpx
 pydantic
 pytest
 pytest-asyncio
+redis>=4.5.0
