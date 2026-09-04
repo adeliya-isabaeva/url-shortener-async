@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import redis.asyncio as redis
 import random
 import string
+from app.services.shortener import save_url, get_url, generate_unique_code
 
 router = APIRouter()
 
@@ -20,19 +21,6 @@ class URLResponse(BaseModel):
     short_code: str
     original_url: str
 
-
-def generate_short_code():
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-
-
-async def save_url(code: str, url: str):
-    await r.set(f"code:{code}", url)
-
-
-async def get_url(code: str):
-    return await r.get(f"code:{code}")
-
-
 @router.post("/shorten", response_model=URLResponse)
 async def shorten_url(request: URLRequest):
     print(f"🚀 ПОЛУЧЕН URL: '{request.url}'")
@@ -45,7 +33,7 @@ async def shorten_url(request: URLRequest):
             detail="Неверный формат URL. Ссылка должна начинаться с http:// или https://"
         )
 
-    code = generate_short_code()
+    code = await generate_unique_code()  # стало так
     await save_url(code, request.url)
     print(f"✅ Сохранено: code:{code} -> {request.url}")
     return URLResponse(short_code=code, original_url=request.url)
