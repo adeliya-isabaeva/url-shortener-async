@@ -19,8 +19,7 @@ async def generate_unique_code(max_attempts: int = 5) -> str:
     )
 
 async def save_url(code: str, url: str) -> None:
-    await r.set(f"code:{code}", url)
-
+    await r.setex(f"code:{code}", 86400, url)
 
 async def get_url(code: str) -> Optional[str]:
     print(f"DEBUG get_url: looking for code='{code}'")
