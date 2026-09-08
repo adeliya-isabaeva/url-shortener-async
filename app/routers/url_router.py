@@ -6,6 +6,7 @@ import redis.asyncio as redis
 import random
 import string
 from app.services.shortener import save_url, get_url, generate_unique_code
+import os
 
 router = APIRouter()
 

@@ -5,6 +5,7 @@ services:
     ports:
       - "8001:8000"
     environment:
+      LINK_TTL_SECONDS: ${LINK_TTL_SECONDS}
       REDIS_URL: redis://redis:6379
     depends_on:
       redis:

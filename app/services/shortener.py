@@ -3,6 +3,11 @@ import string
 from typing import Optional
 from fastapi import HTTPException
 from app.services.redis_client import r
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # читает .env и делает переменные доступными через os.getenv
+LINK_TTL_SECONDS = int(os.getenv("LINK_TTL_SECONDS", "86400"))
 
 def generate_short_code(length: int = 6) -> str:
     characters = string.ascii_letters + string.digits
@@ -19,7 +24,7 @@ async def generate_unique_code(max_attempts: int = 5) -> str:
     )
 
 async def save_url(code: str, url: str) -> None:
-    await r.setex(f"code:{code}", 86400, url)
+    await r.setex(f"code:{code}", LINK_TTL_SECONDS, url)
 
 async def get_url(code: str) -> Optional[str]:
     print(f"DEBUG get_url: looking for code='{code}'")
