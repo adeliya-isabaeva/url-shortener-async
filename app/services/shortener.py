@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from app.services.redis_client import r
 from dotenv import load_dotenv
 import os
+from redis.exceptions import RedisError
 
 load_dotenv()  # читает .env и делает переменные доступными через os.getenv
 LINK_TTL_SECONDS = int(os.getenv("LINK_TTL_SECONDS", "86400"))
@@ -16,15 +17,27 @@ def generate_short_code(length: int = 6) -> str:
 async def generate_unique_code(max_attempts: int = 5) -> str:
     for attempt in range(max_attempts):
         code = generate_short_code()
-        if not await r.exists(f"code:{code}"):
-            return code
+        try:
+            if not await r.exists(f"code:{code}"):
+                return code
+        except RedisError:
+            # Если Redis недоступен — сразу отдаём понятный 503
+            raise HTTPException(
+                status_code=503,
+                detail="Сервис временно недоступен"
+            )
+
+    # Эта ошибка остаётся 500, но она про «не смогли подобрать код», а не про Redis
     raise HTTPException(
         status_code=500,
         detail="Не удалось сгенерировать уникальный код. Попробуйте ещё раз."
     )
 
 async def save_url(code: str, url: str) -> None:
-    await r.setex(f"code:{code}", LINK_TTL_SECONDS, url)
+    try:
+        await r.setex(f"code:{code}", LINK_TTL_SECONDS, url)
+    except RedisError as e:
+        raise HTTPException(status_code=503, detail="Сервис временно недоступен")
 
 async def get_url(code: str) -> Optional[str]:
     print(f"DEBUG get_url: looking for code='{code}'")
