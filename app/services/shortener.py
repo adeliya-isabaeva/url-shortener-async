@@ -40,7 +40,8 @@ async def save_url(code: str, url: str) -> None:
         raise HTTPException(status_code=503, detail="Сервис временно недоступен")
 
 async def get_url(code: str) -> Optional[str]:
-    print(f"DEBUG get_url: looking for code='{code}'")
-    result = await r.get(f"code:{code}")
-    print(f"DEBUG get_url: result='{result}'")
-    return result
+    try:
+        result = await r.get(f"code:{code}")
+        return result
+    except RedisError as e:
+        raise HTTPException(status_code=503, detail="Сервис временно недоступен")
