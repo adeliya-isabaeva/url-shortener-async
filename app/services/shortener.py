@@ -6,6 +6,8 @@ from app.services.redis_client import r
 from dotenv import load_dotenv
 import os
 from redis.exceptions import RedisError
+import logging
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # читает .env и делает переменные доступными через os.getenv
 LINK_TTL_SECONDS = int(os.getenv("LINK_TTL_SECONDS", "86400"))
@@ -22,6 +24,7 @@ async def generate_unique_code(max_attempts: int = 5) -> str:
                 return code
         except RedisError:
             # Если Redis недоступен — сразу отдаём понятный 503
+            logger.error("Redis недоступен при проверке существования кода (попытка %d): %s", attempt, e, exc_info=True)
             raise HTTPException(
                 status_code=503,
                 detail="Сервис временно недоступен"
@@ -37,6 +40,7 @@ async def save_url(code: str, url: str) -> None:
     try:
         await r.setex(f"code:{code}", LINK_TTL_SECONDS, url)
     except RedisError as e:
+        logger.error("Ошибка Redis при сохранении URL: %s", e, exc_info=True)
         raise HTTPException(status_code=503, detail="Сервис временно недоступен")
 
 async def get_url(code: str) -> Optional[str]:
@@ -44,4 +48,5 @@ async def get_url(code: str) -> Optional[str]:
         result = await r.get(f"code:{code}")
         return result
     except RedisError as e:
+        logger.error("Ошибка Redis при получении URL: %s", e, exc_info=True)
         raise HTTPException(status_code=503, detail="Сервис временно недоступен")

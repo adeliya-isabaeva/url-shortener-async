@@ -7,6 +7,9 @@ import random
 import string
 from app.services.shortener import save_url, get_url, generate_unique_code
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -24,11 +27,13 @@ class URLResponse(BaseModel):
 
 @router.post("/shorten", response_model=URLResponse)
 async def shorten_url(request: URLRequest):
-    print(f"🚀 ПОЛУЧЕН URL: '{request.url}'")
+    # print(f" ПОЛУЧЕН URL: '{request.url}'")
+    logger.info("Получен URL: %s", request.url)
 
     parsed = urlparse(request.url)
     if not parsed.scheme or not parsed.netloc:
-        print("⚠️ СРАБОТАЛА ПРОВЕРКА: URL невалиден!")
+        #print("СРАБОТАЛА ПРОВЕРКА: URL невалиден!")
+        logger.warning("URL невалиден: %s", request.url)
         raise HTTPException(
             status_code=422,
             detail="Неверный формат URL. Ссылка должна начинаться с http:// или https://"
@@ -36,7 +41,8 @@ async def shorten_url(request: URLRequest):
 
     code = await generate_unique_code()  # стало так
     await save_url(code, request.url)
-    print(f"✅ Сохранено: code:{code} -> {request.url}")
+    #print(f"✅ Сохранено: code:{code} -> {request.url}")
+    logger.info("✅ Сохранено: code=%s -> %s", code, request.url)
     return URLResponse(short_code=code, original_url=request.url)
 
 
