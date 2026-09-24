@@ -25,7 +25,12 @@ class URLResponse(BaseModel):
     short_code: str
     original_url: str
 
-@router.post("/shorten", response_model=URLResponse)
+@router.post(
+    "/shorten",
+    summary="Создать короткую ссылку",
+    description="Принимает URL, проверяет формат, генерирует короткий код и сохраняет в Redis с TTL.",
+    response_model=URLResponse,
+)
 async def shorten_url(request: URLRequest):
     # print(f" ПОЛУЧЕН URL: '{request.url}'")
     logger.info("Получен URL: %s", request.url)
@@ -41,12 +46,20 @@ async def shorten_url(request: URLRequest):
 
     code = await generate_unique_code()  # стало так
     await save_url(code, request.url)
-    #print(f"✅ Сохранено: code:{code} -> {request.url}")
-    logger.info("✅ Сохранено: code=%s -> %s", code, request.url)
+    #print(f" Сохранено: code:{code} -> {request.url}")
+    logger.info("Сохранено: code=%s -> %s", code, request.url)
     return URLResponse(short_code=code, original_url=request.url)
 
 
-@router.get("/{short_code}")
+@router.get(
+    "/{short_code}",
+    summary="Перейти по короткой ссылке",
+    description="По короткому коду находит оригинальный URL в Redis и делает HTTP 302 редирект. Если ссылка не найдена или истёк TTL — возвращает 404.",
+    responses={
+        302: {"description": "Редирект на оригинальный URL"},
+        404: {"description": "Короткая ссылка не найдена или срок действия истёк"},
+    },
+)
 async def redirect_url(short_code: str):
     original_url = await get_url(short_code)
     if original_url is None:
