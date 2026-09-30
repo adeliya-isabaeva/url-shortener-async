@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import RedirectResponse
 from urllib.parse import urlparse
 from pydantic import BaseModel
@@ -30,8 +30,9 @@ class URLResponse(BaseModel):
     summary="Создать короткую ссылку",
     description="Принимает URL, проверяет формат, генерирует короткий код и сохраняет в Redis с TTL.",
     response_model=URLResponse,
+    status_code=201,
 )
-async def shorten_url(request: URLRequest):
+async def shorten_url(request: URLRequest, response: Response):
     # print(f" ПОЛУЧЕН URL: '{request.url}'")
     logger.info("Получен URL: %s", request.url)
 
@@ -48,6 +49,7 @@ async def shorten_url(request: URLRequest):
     await save_url(code, request.url)
     #print(f" Сохранено: code:{code} -> {request.url}")
     logger.info("Сохранено: code=%s -> %s", code, request.url)
+    response.headers["Location"] = f"/{code}"
     return URLResponse(short_code=code, original_url=request.url)
 
 

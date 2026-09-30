@@ -17,3 +17,4 @@ __pycache__/
 # macOS и Windows мусор
 .DS_Store
 Thumbs.db
+*.egg-info/

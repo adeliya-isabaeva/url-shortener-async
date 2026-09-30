@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "url-shortener-async"
+version = "0.1.0"
+description = "URL Shortener Service"
+requires-python = ">=3.8"
+
+# Это критически важно: setuptools должен знать, что искать пакеты в текущей папке
+[tool.setuptools.packages.find]
+where = ["."]
