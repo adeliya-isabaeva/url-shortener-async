@@ -8,14 +8,14 @@ import string
 from app.services.shortener import save_url, get_url, generate_unique_code
 import os
 import logging
+import redis
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Клиент Redis (имя 'redis' — из docker-compose)
-r = redis.Redis(host="redis", port=6379, decode_responses=True)
-
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 class URLRequest(BaseModel):
     url: str
