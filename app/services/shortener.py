@@ -22,7 +22,7 @@ async def generate_unique_code(max_attempts: int = 5) -> str:
         try:
             if not await r.exists(f"code:{code}"):
                 return code
-        except RedisError:
+        except RedisError as e:
             # Если Redis недоступен — сразу отдаём понятный 503
             logger.error("Redis недоступен при проверке существования кода (попытка %d): %s", attempt, e, exc_info=True)
             raise HTTPException(

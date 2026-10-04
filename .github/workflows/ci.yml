@@ -37,4 +37,4 @@ jobs:
         env:
           REDIS_URL: redis://localhost:6379
           LINK_TTL_SECONDS: "86400"
-        run:
+        run: pytest -v

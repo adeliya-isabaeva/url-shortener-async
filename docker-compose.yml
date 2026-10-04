@@ -13,6 +13,18 @@ services:
     volumes:
       - .:/app
 
+  test:
+      build: .
+      command: pytest -v
+      environment:
+        REDIS_URL: redis://redis:6379
+        LINK_TTL_SECONDS: "86400"
+      depends_on:
+        redis:
+          condition: service_healthy
+      volumes:
+        - .:/app
+
   redis:
     image: redis:7-alpine
     ports:
