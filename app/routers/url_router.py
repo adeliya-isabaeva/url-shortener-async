@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import RedirectResponse
 from urllib.parse import urlparse
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 import redis.asyncio as redis
 import random
 import string
@@ -18,12 +18,12 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 class URLRequest(BaseModel):
-    url: str
+    url: HttpUrl
 
 
 class URLResponse(BaseModel):
     short_code: str
-    original_url: str
+    original_url: HttpUrl
 
 @router.post(
     "/shorten",
@@ -33,22 +33,12 @@ class URLResponse(BaseModel):
     status_code=201,
 )
 async def shorten_url(request: URLRequest, response: Response):
-    # print(f" ПОЛУЧЕН URL: '{request.url}'")
     logger.info("Получен URL: %s", request.url)
 
-    parsed = urlparse(request.url)
-    if not parsed.scheme or not parsed.netloc:
-        #print("СРАБОТАЛА ПРОВЕРКА: URL невалиден!")
-        logger.warning("URL невалиден: %s", request.url)
-        raise HTTPException(
-            status_code=422,
-            detail="Неверный формат URL. Ссылка должна начинаться с http:// или https://"
-        )
-
-    code = await generate_unique_code()  # стало так
+    code = await generate_unique_code()
     await save_url(code, request.url)
-    #print(f" Сохранено: code:{code} -> {request.url}")
     logger.info("Сохранено: code=%s -> %s", code, request.url)
+
     response.headers["Location"] = f"/{code}"
     return URLResponse(short_code=code, original_url=request.url)
 

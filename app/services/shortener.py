@@ -38,7 +38,7 @@ async def generate_unique_code(max_attempts: int = 5) -> str:
 
 async def save_url(code: str, url: str) -> None:
     try:
-        await r.setex(f"code:{code}", LINK_TTL_SECONDS, url)
+        await r.set(f"code:{code}", str(url), ex=LINK_TTL_SECONDS)
     except RedisError as e:
         logger.error("Ошибка Redis при сохранении URL: %s", e, exc_info=True)
         raise HTTPException(status_code=503, detail="Сервис временно недоступен")
