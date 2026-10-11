@@ -1,21 +1,25 @@
-from fastapi import APIRouter, HTTPException, Response
+# app/routers/url_router.py
+from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import RedirectResponse
-from urllib.parse import urlparse
 from pydantic import BaseModel, HttpUrl
-import redis.asyncio as redis
-import random
-import string
-from app.services.shortener import save_url, get_url, generate_unique_code
+from app.services.redis_client import get_redis_client
+from app.services.shortener import generate_unique_code, get_url
 import os
 import logging
-import redis
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+MAX_URL_LENGTH = 200
+
+# Читаем TTL из ENV, по умолчанию 3600 секунд (1 час), если не задано
+try:
+    LINK_TTL_SECONDS = int(os.getenv("LINK_TTL_SECONDS", "3600"))
+except ValueError:
+    logger.warning("LINK_TTL_SECONDS is not a valid integer, using default 3600")
+    LINK_TTL_SECONDS = 3600
+
 
 class URLRequest(BaseModel):
     url: HttpUrl
@@ -24,6 +28,8 @@ class URLRequest(BaseModel):
 class URLResponse(BaseModel):
     short_code: str
     original_url: HttpUrl
+    already_exists: bool = False
+
 
 @router.post(
     "/shorten",
@@ -33,15 +39,53 @@ class URLResponse(BaseModel):
     status_code=201,
 )
 async def shorten_url(request: URLRequest, response: Response):
-    logger.info("Получен URL: %s", request.url)
+    url_str = str(request.url)
+    logger.info("Получен URL: %s", url_str)
 
-    code = await generate_unique_code()
-    await save_url(code, request.url)
-    logger.info("Сохранено: code=%s -> %s", code, request.url)
+    if len(url_str) > MAX_URL_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL слишком длинный"
+        )
+
+    existing_key = f"url:{url_str}"
+
+    # ВАЖНО: используем асинхронную функцию, которая сама умеет ждать Redis
+    client = await get_redis_client()
+
+    try:
+        existing_code = await client.get(existing_key)
+    except Exception as e:
+        # Если даже после всех попыток get_redis_client не смог подключиться — это реальная авария
+        logger.error("Не удалось получить данные из Redis: %s", e, exc_info=True)
+        raise HTTPException(status_code=503, detail="Redis временно недоступен")
+
+    if existing_code:
+        return URLResponse(
+            short_code=existing_code,
+            original_url=request.url,
+            already_exists=True,
+        )
+
+    # Генерация уникального short_code
+    try:
+        code = await generate_unique_code()
+    except Exception as e:
+        logger.error("Ошибка при генерации кода: %s", e, exc_info=True)
+        raise HTTPException(status_code=503, detail="Сервис временно недоступен")
+
+    code_key = f"code:{code}"
+
+    # Сохраняем данные
+    await client.set(code_key, url_str, ex=LINK_TTL_SECONDS)
+    await client.set(existing_key, code, ex=LINK_TTL_SECONDS)
 
     response.headers["Location"] = f"/{code}"
-    return URLResponse(short_code=code, original_url=request.url)
-
+    return URLResponse(
+        short_code=code,
+        original_url=request.url,
+        already_exists=False,
+    )
 
 @router.get(
     "/{short_code}",

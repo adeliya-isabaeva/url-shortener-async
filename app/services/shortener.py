@@ -2,51 +2,56 @@ import random
 import string
 from typing import Optional
 from fastapi import HTTPException
-from app.services.redis_client import r
+from app.services.redis_client import get_redis_client  # <-- ВАЖНО: импортируем не r, а get_redis_client
 from dotenv import load_dotenv
 import os
 from redis.exceptions import RedisError
 import logging
+
 logger = logging.getLogger(__name__)
 
-load_dotenv()  # читает .env и делает переменные доступными через os.getenv
+load_dotenv()
 LINK_TTL_SECONDS = int(os.getenv("LINK_TTL_SECONDS", "86400"))
+
 
 def generate_short_code(length: int = 6) -> str:
     characters = string.ascii_letters + string.digits
     return "".join(random.choices(characters, k=length))
 
+
 async def generate_unique_code(max_attempts: int = 5) -> str:
+    # Получаем клиент один раз перед циклом (или можно внутри, если боишься таймаутов)
+    client = await get_redis_client()
+
     for attempt in range(max_attempts):
         code = generate_short_code()
         try:
-            if not await r.exists(f"code:{code}"):
+            # Теперь вызываем exists у клиента, а не у функции r
+            exists = await client.exists(f"code:{code}")
+            if not exists:
                 return code
         except RedisError as e:
-            # Если Redis недоступен — сразу отдаём понятный 503
             logger.error("Redis недоступен при проверке существования кода (попытка %d): %s", attempt, e, exc_info=True)
-            raise HTTPException(
-                status_code=503,
-                detail="Сервис временно недоступен"
-            )
+            raise
 
-    # Эта ошибка остаётся 500, но она про «не смогли подобрать код», а не про Redis
-    raise HTTPException(
-        status_code=500,
-        detail="Не удалось сгенерировать уникальный код. Попробуйте ещё раз."
-    )
+    logger.error("Не удалось подобрать уникальный код после %d попыток", max_attempts)
+    raise RuntimeError("Не удалось сгенерировать уникальный код")
+
 
 async def save_url(code: str, url: str) -> None:
+    client = await get_redis_client()  # <-- Получаем клиента
     try:
-        await r.set(f"code:{code}", str(url), ex=LINK_TTL_SECONDS)
+        await client.set(f"code:{code}", str(url), ex=LINK_TTL_SECONDS)
     except RedisError as e:
         logger.error("Ошибка Redis при сохранении URL: %s", e, exc_info=True)
-        raise HTTPException(status_code=503, detail="Сервис временно недоступен")
+        raise
+
 
 async def get_url(code: str) -> Optional[str]:
+    client = await get_redis_client()  # <-- Получаем клиента
     try:
-        result = await r.get(f"code:{code}")
+        result = await client.get(f"code:{code}")
         return result
     except RedisError as e:
         logger.error("Ошибка Redis при получении URL: %s", e, exc_info=True)
-        raise HTTPException(status_code=503, detail="Сервис временно недоступен")
+        raise
