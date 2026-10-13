@@ -20,7 +20,11 @@ services:
 
   test:
     build: .
-    command: pytest -v
+    # ВАЖНО: Здесь мы сначала запускаем сервер, ждём, потом запускаем тесты
+    command: >
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 & 
+             sleep 5; 
+             pytest -v"
     environment:
       LINK_TTL_SECONDS: "86400"
       REDIS_URL: redis://redis:6379
