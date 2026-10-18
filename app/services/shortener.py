@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 LINK_TTL_SECONDS = int(os.getenv("LINK_TTL_SECONDS", "86400"))
 
+from app.services.redis_sync import get_redis_sync
+
+async def get_total_count():
+    r = get_redis_sync()
+    # Считаем все ключи, начинающиеся с "code:"
+    return len(r.keys("code:*"))
 
 def generate_short_code(length: int = 6) -> str:
     characters = string.ascii_letters + string.digits
@@ -39,9 +45,14 @@ async def generate_unique_code(max_attempts: int = 5) -> str:
 
 
 async def save_url(code: str, url: str) -> None:
-    client = await get_redis_client()  # <-- Получаем клиента
+    client = await get_redis_client()
     try:
+        # Сначала сохраняем саму ссылку
         await client.set(f"code:{code}", str(url), ex=LINK_TTL_SECONDS)
+
+        # --- ВОТ ЭТА СТРОКА — СЧЁТЧИК (асинхронно!) ---
+        await client.incr("counter:shortened")
+        # -----------------------------------------------
     except RedisError as e:
         logger.error("Ошибка Redis при сохранении URL: %s", e, exc_info=True)
         raise

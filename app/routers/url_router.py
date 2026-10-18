@@ -6,6 +6,7 @@ from app.services.redis_client import get_redis_client
 from app.services.shortener import generate_unique_code, get_url
 import os
 import logging
+from app.services.shortener import get_total_count
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,10 @@ class URLResponse(BaseModel):
     original_url: HttpUrl
     already_exists: bool = False
 
+@router.get("/stats", summary="Статистика сервиса")
+async def get_stats():
+    total = await get_total_count()
+    return {"total_shortened": total}
 
 @router.post(
     "/shorten",
@@ -101,3 +106,22 @@ async def redirect_url(short_code: str):
     if original_url is None:
         raise HTTPException(status_code=404, detail="Short code not found")
     return RedirectResponse(url=original_url, status_code=302)
+
+
+@router.get(
+    "/stats",
+    summary="Статистика сервиса",
+    description="Возвращает общее количество созданных коротких ссылок.",
+    response_model=dict,
+)
+async def get_stats():
+    client = await get_redis_client()
+
+    try:
+        count = await client.get("counter:shortened")
+        # Если ключа нет (ещё ни одной ссылки), Redis вернёт None
+        total = int(count) if count is not None else 0
+        return {"total_shortened": total}
+    except Exception as e:
+        logger.error("Ошибка получения статистики: %s", e, exc_info=True)
+        raise HTTPException(status_code=503, detail="Не удалось получить статистику")
