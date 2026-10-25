@@ -1,14 +1,10 @@
-version: "3.8"
-
 services:
   app:
     build: .
-    # Важно: путь к приложению должен совпадать с тем, где лежит main.py
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8001:8000"
+      - "8001:8000"  # Чтобы ты могла ходить в Swagger/браузер по localhost:8001
     environment:
-      # Обязательно задай дефолтное значение, если переменная не передана в shell
       LINK_TTL_SECONDS: ${LINK_TTL_SECONDS:-3600}
       REDIS_URL: redis://redis:6379
     depends_on:
@@ -16,19 +12,19 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
-    restart: unless-stopped
 
   test:
     build: .
-    # ВАЖНО: Здесь мы сначала запускаем сервер, ждём, потом запускаем тесты
-    command: >
-      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 & 
-             sleep 5; 
-             pytest -v"
+    # Теперь здесь ТОЛЬКО тесты. Приложение уже поднято в сервисе app.
+    command: pytest -v
     environment:
       LINK_TTL_SECONDS: "86400"
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: "redis://redis:6379"
+      # Важно: стучимся по имени сервиса app (внутренняя сеть Docker)
+      BASE_URL: "http://app:8000"
     depends_on:
+      app:
+        condition: service_started
       redis:
         condition: service_healthy
     volumes:
@@ -42,10 +38,10 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 2s              # Проверяем чаще (каждые 2 сек)
-      timeout: 3s               # Ждем ответа меньше (3 сек)
-      retries: 10               # Увеличили количество попыток до 10!
-      start_period: 40s        # ДАЕМ ВРЕМЯ НА ЗАПУСК (Redis в Alpine стартует чуть дольше)
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 40s
 
 volumes:
   redis_data:

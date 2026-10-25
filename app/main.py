@@ -23,13 +23,15 @@ RATE_PERIOD_SECONDS = 60
 async def rate_limit_middleware(request: Request, call_next):
     r = get_redis_sync()
     client_ip = request.client.host
-    key = f"rate:{client_ip}"
+    # Для отладки теста — один ключ на все запросы
+    key = "rate:test_single_key"
 
     try:
         count = r.incr(key)
 
         if count == 1:
             r.expire(key, RATE_PERIOD_SECONDS)
+        logger.info(f"rate_limit: ip={client_ip}, key={key}, count={count}, limit={RATE_LIMIT}")
 
         if count > RATE_LIMIT:
             return JSONResponse(
